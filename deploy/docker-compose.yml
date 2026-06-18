@@ -17,9 +17,20 @@ services:
       OD_WEB_PORT: ${OPEN_DESIGN_PORT:-7456}
       OD_API_TOKEN: ${OD_API_TOKEN:?Please run 'openssl rand -hex 32' to generate one, and set it in your .env file.}
       OD_CODEX_SANDBOX: ${OD_CODEX_SANDBOX:-}
-      # Optional email/password accounts (better-auth). Leave unset to disable.
+      # Optional accounts (better-auth). Leave OPEN_DESIGN_DATABASE_URL unset to disable.
       OPEN_DESIGN_DATABASE_URL: ${OPEN_DESIGN_DATABASE_URL:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      # Google OAuth (both required to enable "Continue with Google").
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Signup policy: open | invite | closed.
+      OD_AUTH_SIGNUP_MODE: ${OD_AUTH_SIGNUP_MODE:-open}
+      # Email-code (OTP) delivery. Without SMTP the code is written to the daemon log.
+      OD_AUTH_SMTP_HOST: ${OD_AUTH_SMTP_HOST:-}
+      OD_AUTH_SMTP_PORT: ${OD_AUTH_SMTP_PORT:-587}
+      OD_AUTH_SMTP_USER: ${OD_AUTH_SMTP_USER:-}
+      OD_AUTH_SMTP_PASS: ${OD_AUTH_SMTP_PASS:-}
+      OD_AUTH_SMTP_FROM: ${OD_AUTH_SMTP_FROM:-}
     ports:
       - "127.0.0.1:${OPEN_DESIGN_PORT:-7456}:7456"
     volumes:
