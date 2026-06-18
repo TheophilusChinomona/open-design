@@ -14,6 +14,7 @@ import {
   fidelityToTracking,
 } from '@open-design/contracts/analytics';
 import type { AmrModelsResponse, ChatSessionMode } from '@open-design/contracts';
+import { AuthGate } from './components/AuthGate';
 import { EntryView } from './components/EntryView';
 import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
@@ -327,7 +328,9 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <IframeKeepAliveProvider>
-        <AppInner />
+        <AuthGate>
+          <AppInner />
+        </AuthGate>
       </IframeKeepAliveProvider>
     </MotionConfig>
   );

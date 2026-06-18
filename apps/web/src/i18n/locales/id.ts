@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const id: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Masuk ke Open Design',
+  'auth.loginSubtitle': 'Masuk untuk melanjutkan.',
+  'auth.continueWithGoogle': 'Lanjutkan dengan Google',
+  'auth.emailCode': 'Kirim kode ke email',
+  'auth.sendCode': 'Kirim kode',
+  'auth.codeLabel': 'Kode verifikasi',
+  'auth.verify': 'Verifikasi',
+  'auth.or': 'atau',
+  'auth.back': 'Kembali',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'Masuk',
   'auth.create': 'Buat',

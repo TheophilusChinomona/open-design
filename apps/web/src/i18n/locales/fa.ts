@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const fa: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'ورود به Open Design',
+  'auth.loginSubtitle': 'برای ادامه وارد شوید.',
+  'auth.continueWithGoogle': 'ادامه با Google',
+  'auth.emailCode': 'کد را برایم ایمیل کن',
+  'auth.sendCode': 'ارسال کد',
+  'auth.codeLabel': 'کد تأیید',
+  'auth.verify': 'تأیید',
+  'auth.or': 'یا',
+  'auth.back': 'بازگشت',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'ورود',
   'auth.create': 'ایجاد',

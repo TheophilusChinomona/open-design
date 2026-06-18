@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const ptBR: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Entrar no Open Design',
+  'auth.loginSubtitle': 'Entre para continuar.',
+  'auth.continueWithGoogle': 'Continuar com o Google',
+  'auth.emailCode': 'Enviar um código por e-mail',
+  'auth.sendCode': 'Enviar código',
+  'auth.codeLabel': 'Código de verificação',
+  'auth.verify': 'Verificar',
+  'auth.or': 'ou',
+  'auth.back': 'Voltar',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'Entrar',
   'auth.create': 'Criar',

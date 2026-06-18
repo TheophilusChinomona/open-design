@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const ko: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Open Design에 로그인',
+  'auth.loginSubtitle': '계속하려면 로그인하세요.',
+  'auth.continueWithGoogle': 'Google로 계속하기',
+  'auth.emailCode': '이메일로 코드 받기',
+  'auth.sendCode': '코드 보내기',
+  'auth.codeLabel': '인증 코드',
+  'auth.verify': '확인',
+  'auth.or': '또는',
+  'auth.back': '뒤로',
   // Auth (AuthAccountMenu)
   'auth.signIn': '로그인',
   'auth.create': '만들기',
