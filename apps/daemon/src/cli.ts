@@ -14,6 +14,7 @@ import { parseDesignSystemRenameArgs } from './design-system-rename-args.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { resolveDaemonUrl } from './daemon-url.js';
+import { bearerTokenFromResponse, clearCliAuthToken, readCliAuthConfig, writeCliAuthConfig } from './cli-auth-config.js';
 import { requestJsonIpc } from '@open-design/sidecar';
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from '@open-design/sidecar-proto';
 import {
@@ -222,7 +223,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
 ]);
 const AUTH_STRING_FLAGS = new Set([
-  'daemon-url', 'email', 'password', 'password-file', 'name',
+  'daemon-url', 'email', 'password', 'password-file', 'name', 'token',
 ]);
 const AUTH_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
@@ -7346,9 +7347,14 @@ async function runAuth(args) {
   // a trusted Origin. The web AuthAccountMenu gets this for free from the
   // browser; the CLI must send the daemon's own origin so the request is
   // treated as same-origin.
+  // Bearer token (from ~/.open-design/config.json or --token) lets `od` drive a
+  // hosted instance where the cookie jar isn't carried; the Phase 2 gate accepts
+  // it via the bearer plugin.
+  const storedToken = (typeof flags.token === 'string' && flags.token) || readCliAuthConfig().token || null;
   const post = async (path, body, { cookie } = {}) => {
     const headers = { 'content-type': 'application/json', origin: base };
     if (cookie) headers.cookie = cookie;
+    if (storedToken) headers.authorization = `Bearer ${storedToken}`;
     try {
       return await fetch(`${base}${path}`, {
         method: 'POST',
@@ -7366,7 +7372,11 @@ async function runAuth(args) {
     let resp;
     try {
       resp = await fetch(`${base}/api/auth/get-session`, {
-        headers: { origin: base, ...(cookie ? { cookie } : {}) },
+        headers: {
+          origin: base,
+          ...(cookie ? { cookie } : {}),
+          ...(storedToken ? { authorization: `Bearer ${storedToken}` } : {}),
+        },
       });
     } catch (err) {
       surfaceFetchError(err, base);
@@ -7401,19 +7411,23 @@ async function runAuth(args) {
     const data = await resp.json().catch(() => null);
     const cookie = captureAuthSessionCookie(resp);
     if (cookie) writeStoredAuthCookie(cookie);
+    // Also persist the bearer token (set-auth-token) so the CLI can drive a
+    // remote/hosted daemon without relying on the cookie jar.
+    const bearer = bearerTokenFromResponse(resp);
+    if (bearer) writeCliAuthConfig({ daemonUrl: base, token: bearer });
     const user = data?.user ?? null;
-    if (flags.json) return writeJson({ ok: true, persisted: Boolean(cookie), user });
+    if (flags.json) return writeJson({ ok: true, persisted: Boolean(cookie || bearer), user });
     const who = user ? `${user.name ?? user.email}${user.email ? ` <${user.email}>` : ''}` : email;
     console.log(`${action === 'sign-up' ? 'Created account and signed in' : 'Signed in'} as ${who}.`);
-    if (!cookie) {
-      console.error('warning: no session cookie returned; `od auth status` may show signed out.');
+    if (!cookie && !bearer) {
+      console.error('warning: no session token returned; `od auth status` may show signed out.');
     }
     return;
   }
 
   if (action === 'sign-out') {
     const cookie = readStoredAuthCookie();
-    if (!cookie) {
+    if (!cookie && !storedToken) {
       if (flags.json) return writeJson({ ok: true, alreadySignedOut: true });
       console.log('Already signed out.');
       return;
@@ -7421,6 +7435,7 @@ async function runAuth(args) {
     const resp = await post('/api/auth/sign-out', {}, { cookie });
     if (!resp.ok && resp.status !== 404) return authHttpFailure(resp);
     clearStoredAuthCookie();
+    clearCliAuthToken();
     if (flags.json) return writeJson({ ok: true });
     console.log('Signed out.');
     return;
