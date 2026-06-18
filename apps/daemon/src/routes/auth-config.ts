@@ -69,10 +69,11 @@ export function resolveAuthConfig(env: NodeJS.ProcessEnv): AuthConfig | null {
   return {
     databaseUrl,
     secret: (env.BETTER_AUTH_SECRET ?? env.AUTH_SECRET ?? '').trim(),
-    baseURL,
+    // Omit (don't set to undefined) optional props — exactOptionalPropertyTypes.
+    ...(baseURL ? { baseURL } : {}),
     trustedOriginsStatic: allowed,
     useSecureCookies: baseURL ? baseURL.startsWith('https://') : false,
-    google: googleId && googleSecret ? { clientId: googleId, clientSecret: googleSecret } : undefined,
+    ...(googleId && googleSecret ? { google: { clientId: googleId, clientSecret: googleSecret } } : {}),
     signupMode,
     email,
   };
