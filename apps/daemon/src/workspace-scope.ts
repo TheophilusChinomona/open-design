@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+import type { Request, RequestHandler } from 'express';
 
 /**
  * Workspace (organization) data isolation — DB-only ownership model.
@@ -57,4 +57,42 @@ export function scopeRecords<T extends WorkspaceOwned>(scope: WorkspaceScope, re
 export function stampWorkspace<T extends WorkspaceOwned>(scope: WorkspaceScope, record: T): T {
   if (!scope.scoped || scope.workspaceId == null) return record;
   return { ...record, workspaceId: scope.workspaceId };
+}
+
+/** Result of looking up a record's owning workspace for the access gate. */
+export interface WorkspaceLookup {
+  /** Whether the record exists at all (false → let the downstream handler 404). */
+  exists: boolean;
+  workspaceId: WorkspaceId | null;
+}
+
+/**
+ * Express middleware that enforces workspace ownership for a single resource
+ * addressed by `req.params[idParam]` (default `id`). Mount it on a parameterised
+ * path prefix (e.g. `/api/projects/:id`) so it also covers every sub-resource
+ * under that record in one place.
+ *
+ * Behaviour:
+ *  - Unscoped (local/loopback) requests pass through untouched.
+ *  - For a scoped request, a record owned by another workspace (or a
+ *    legacy/unowned record with no workspaceId, or any record when the request
+ *    has no active workspace) responds 404 — NOT 403 — so cross-tenant probes
+ *    can't even confirm a record exists.
+ *  - A missing record passes through so the existing handler returns its own 404.
+ */
+export function createProjectWorkspaceGate(
+  lookup: (id: string) => WorkspaceLookup,
+  idParam = 'id',
+): RequestHandler {
+  return (req, res, next) => {
+    const scope = resolveWorkspaceScope(req);
+    if (!scope.scoped) return next();
+    const raw = req.params[idParam];
+    const id = Array.isArray(raw) ? raw[0] : raw;
+    if (!id) return next();
+    const record = lookup(id);
+    if (!record.exists) return next();
+    if (canAccessRecord(scope, record.workspaceId)) return next();
+    res.status(404).json({ error: { code: 'PROJECT_NOT_FOUND', message: 'not found' } });
+  };
 }
