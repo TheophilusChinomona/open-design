@@ -91,6 +91,21 @@ describe('createApiAuthGate', () => {
     expect((res.body as any).error.code).toBe('API_TOKEN_REQUIRED');
   });
 
+  it('fails CLOSED with 503 when auth is configured but the backend is down', () => {
+    const next = vi.fn();
+    const res = fakeRes();
+    createApiAuthGate({ auth: null, authConfigured: true, isLoopbackPeer: loopback })(fakeReq(), res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(503);
+    expect((res.body as any).error.code).toBe('AUTH_UNAVAILABLE');
+  });
+
+  it('configured-but-down still allows loopback + probes (recovery/health)', () => {
+    const gate = createApiAuthGate({ auth: null, authConfigured: true, isLoopbackPeer: loopback });
+    const n1 = vi.fn(); gate(fakeReq({ remote: '127.0.0.1' }), fakeRes(), n1); expect(n1).toHaveBeenCalledOnce();
+    const n2 = vi.fn(); gate(fakeReq({ path: '/api/health' }), fakeRes(), n2); expect(n2).toHaveBeenCalledOnce();
+  });
+
   it('respects the isExempt hook (e.g. preview-asset scopes)', () => {
     const next = vi.fn();
     createApiAuthGate({

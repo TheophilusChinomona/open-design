@@ -27,7 +27,7 @@ import {
 } from './prompts/system.js';
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
 import { resolveProjectRoot } from './project-root.js';
-import { registerAuthRoutes } from './routes/auth.js';
+import { registerAuthRoutes, isAuthConfigured } from './routes/auth.js';
 import { createApiAuthGate } from './auth-context.js';
 import {
   resolveDaemonCliPath,
@@ -4778,6 +4778,8 @@ export async function startServer({
   // it's safe before express.json. Replaces the shared-OD_API_TOKEN middleware.
   app.use('/api', createApiAuthGate({
     auth: openDesignAuth?.auth ?? null,
+    // Configured-but-null means the DB was unreachable at boot → fail closed.
+    authConfigured: isAuthConfigured(process.env),
     isLoopbackPeer: isLoopbackPeerAddress,
     ...(apiToken.length > 0 ? { legacyApiToken: apiToken } : {}),
     isExempt: (req) => {

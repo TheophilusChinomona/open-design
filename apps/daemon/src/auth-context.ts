@@ -53,6 +53,13 @@ export interface ApiAuthGateOptions {
   legacyApiToken?: string;
   /** Extra exemption hook (e.g. server-minted GET preview-asset scopes for iframes). */
   isExempt?: (req: Request) => boolean;
+  /**
+   * True when auth IS configured (OPEN_DESIGN_DATABASE_URL set) but the
+   * better-auth instance failed to come up (DB unreachable). The gate then
+   * fails CLOSED — gated requests get 503 instead of being let through — so a
+   * DB outage never silently drops protection on a hosted instance.
+   */
+  authConfigured?: boolean;
 }
 
 function bearerToken(headers: Headers): string | null {
@@ -69,10 +76,10 @@ function bearerToken(headers: Headers): string | null {
  * pass-through so a no-DB instance behaves exactly as before.
  */
 export function createApiAuthGate(options: ApiAuthGateOptions): RequestHandler {
-  const { auth, isLoopbackPeer, legacyApiToken, isExempt } = options;
-  // Nothing to enforce when there are neither accounts nor a shared token: a
-  // plain local/no-auth instance behaves exactly as before.
-  const enforcing = Boolean(auth) || Boolean(legacyApiToken);
+  const { auth, isLoopbackPeer, legacyApiToken, isExempt, authConfigured } = options;
+  // Nothing to enforce when there are neither accounts, a shared token, nor a
+  // configured-but-down backend: a plain local/no-auth instance is unchanged.
+  const enforcing = Boolean(auth) || Boolean(legacyApiToken) || Boolean(authConfigured);
   return (req, res, next) => {
     if (!enforcing) return next();
 
@@ -87,6 +94,13 @@ export function createApiAuthGate(options: ApiAuthGateOptions): RequestHandler {
     if (legacyApiToken && bearerToken(headers) === legacyApiToken) return next();
 
     if (!auth) {
+      if (authConfigured) {
+        // Accounts are configured but the auth backend is down: fail CLOSED.
+        res.status(503).json({
+          error: { code: 'AUTH_UNAVAILABLE', message: 'Authentication backend is unavailable. Try again shortly.' },
+        });
+        return;
+      }
       // Legacy-token-only deployment and the token was absent/wrong.
       res.status(401).json({
         error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
