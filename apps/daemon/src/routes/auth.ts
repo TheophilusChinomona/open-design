@@ -202,5 +202,40 @@ async function ensureBetterAuthPostgresSchema(pool: Pool): Promise<void> {
       "updatedAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification"("identifier");
+
+    -- organization plugin: workspaces + members + invitations.
+    CREATE TABLE IF NOT EXISTS "organization" (
+      "id" text PRIMARY KEY,
+      "name" text NOT NULL,
+      "slug" text UNIQUE,
+      "logo" text,
+      "metadata" text,
+      "createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS "member" (
+      "id" text PRIMARY KEY,
+      "organizationId" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+      "userId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+      "role" text NOT NULL DEFAULT 'member',
+      "createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS "member_organizationId_idx" ON "member"("organizationId");
+    CREATE INDEX IF NOT EXISTS "member_userId_idx" ON "member"("userId");
+
+    CREATE TABLE IF NOT EXISTS "invitation" (
+      "id" text PRIMARY KEY,
+      "organizationId" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+      "email" text NOT NULL,
+      "role" text,
+      "status" text NOT NULL DEFAULT 'pending',
+      "expiresAt" timestamp NOT NULL,
+      "inviterId" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS "invitation_organizationId_idx" ON "invitation"("organizationId");
+    CREATE INDEX IF NOT EXISTS "invitation_email_idx" ON "invitation"("email");
+
+    -- The active workspace for a session (set by the organization plugin).
+    ALTER TABLE "session" ADD COLUMN IF NOT EXISTS "activeOrganizationId" text;
   `);
 }
