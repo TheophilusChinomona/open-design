@@ -635,6 +635,7 @@
   gap: 6px;
   flex-shrink: 0;
 }
+/* AuthAccountMenu styles moved to AuthAccountMenu.module.css (CSS Module). */
 .app-chrome-file-actions-before {
   display: inline-flex;
   align-items: center;
