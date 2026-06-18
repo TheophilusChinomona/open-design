@@ -94,11 +94,32 @@ export async function registerAuthRoutes(
   app: Express,
   deps: RegisterAuthRoutesDeps,
 ): Promise<OpenDesignAuthRuntime | null> {
-  const runtime = await createOpenDesignAuth(deps);
+  let runtime: OpenDesignAuthRuntime | null;
+  try {
+    runtime = await createOpenDesignAuth(deps);
+  } catch (error) {
+    // Auth was configured (OPEN_DESIGN_DATABASE_URL set) but the database is
+    // unreachable. Do NOT crash the daemon — and do NOT silently disable auth
+    // (that would fail OPEN on a hosted instance). Start in "locked" mode: the
+    // /api/auth routes stay unmounted and the API gate fails CLOSED (503) until
+    // the DB recovers and the daemon is restarted. authConfigured() lets the
+    // gate tell this apart from a genuinely auth-less instance.
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `[auth] backend unavailable — starting in LOCKED mode; gated /api will 503 until the DB is reachable and the daemon restarts: ${message}\n`,
+    );
+    return null;
+  }
   if (runtime) {
     app.all('/api/auth/*splat', runtime.handler);
   }
   return runtime;
+}
+
+/** Whether auth is configured at all (OPEN_DESIGN_DATABASE_URL set). Lets the
+ *  gate distinguish "no accounts" (open) from "configured but DB down" (locked). */
+export function isAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveAuthConfig(env) != null;
 }
 
 export async function createOpenDesignAuth(options: {
@@ -110,7 +131,15 @@ export async function createOpenDesignAuth(options: {
   if (!config) return null;
 
   const pool = new Pool({ connectionString: config.databaseUrl });
-  await ensureBetterAuthPostgresSchema(pool);
+  try {
+    // Tolerate a brief DB blip on boot (e.g. the tunnel/DB coming up a moment
+    // after the daemon): retry the schema ensure before giving up. A genuine
+    // outage still throws → registerAuthRoutes catches it (locked mode).
+    await ensureSchemaWithRetry(pool);
+  } catch (error) {
+    await pool.end().catch(() => {});
+    throw error;
+  }
 
   const emailSender = createEmailSender(config.email);
   const secret = config.secret || resolveAuthSecret(options.dataDir, env);
@@ -150,6 +179,25 @@ function resolveAuthSecret(dataDir: string, env: NodeJS.ProcessEnv): string {
 
 function isNodeErrorWithCode(error: unknown, code: string): error is NodeJS.ErrnoException {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
+}
+
+async function ensureSchemaWithRetry(pool: Pool): Promise<void> {
+  const attempts = Math.max(1, Number(process.env.OD_AUTH_DB_RETRIES ?? 5) || 5);
+  const delayMs = Math.max(0, Number(process.env.OD_AUTH_DB_RETRY_MS ?? 1500) || 1500);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await ensureBetterAuthPostgresSchema(pool);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        process.stderr.write(`[auth] DB not ready (attempt ${attempt}/${attempts}), retrying in ${delayMs}ms…\n`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function ensureBetterAuthPostgresSchema(pool: Pool): Promise<void> {
