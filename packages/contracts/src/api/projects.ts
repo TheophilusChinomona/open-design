@@ -90,6 +90,13 @@ export interface DesignSystemReviewEntry {
 
 export interface ProjectMetadata {
   kind: ProjectKind;
+  /**
+   * Owning workspace (better-auth organization id) for multi-tenant isolation.
+   * Server-stamped on create from the request's active workspace; never accepted
+   * from the client. Absent/null = legacy/local project: visible to local
+   * (loopback) requests only, never to a scoped hosted workspace member.
+   */
+  workspaceId?: string | null;
   intent?: 'live-artifact';
   fidelity?: 'wireframe' | 'high-fidelity';
   speakerNotes?: boolean;

@@ -32,6 +32,7 @@ import {
 } from './project-locations.js';
 import { auditDesignSystemPackage } from './tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
+import { resolveWorkspaceScope, canAccessRecord, createProjectWorkspaceGate } from './workspace-scope.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'validation'> {}
 
@@ -774,6 +775,17 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
   const { randomId } = ctx.ids;
   const { validateProjectDesignSystemId, validateProjectSkillId } = ctx.validation;
+
+  // Multi-tenant isolation (DB-only ownership): a scoped/hosted request may only
+  // touch a project owned by its active workspace. Mounted before every
+  // `/api/projects/:id...` route so it covers the project itself AND all
+  // sub-resources (files, conversations, runs, tabs, …) in one choke point.
+  // Local/loopback requests are unscoped and pass through unchanged.
+  app.use('/api/projects/:id', createProjectWorkspaceGate((projectId) => {
+    const project = getProject(db, projectId);
+    return { exists: Boolean(project), workspaceId: project?.metadata?.workspaceId ?? null };
+  }));
+
   async function loadPluginRegistryView() {
     const [skills, designSystems] = await Promise.all([
       listSkills(SKILLS_DIR),
@@ -1013,8 +1025,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     }
   });
 
-  app.get('/api/projects', async (_req, res) => {
+  app.get('/api/projects', async (req, res) => {
     try {
+      const scope = resolveWorkspaceScope(req);
       const locations = await configuredProjectLocations();
       const latestRunStatuses = listLatestProjectRunStatuses(db);
       const awaitingInputProjects = listProjectsAwaitingInput(db);
@@ -1038,6 +1051,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const body = {
         projects: listProjects(db)
           .filter((project: any) => projectVisibleForLocations(project, locations))
+          .filter((project: any) => canAccessRecord(scope, project.metadata?.workspaceId ?? null))
           .map((project: any) => ({
             ...project,
             status: composeProjectDisplayStatus(
@@ -1091,6 +1105,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           return sendApiError(
             res, 400, 'BAD_REQUEST',
             'fromTrustedPicker can only be set via POST /api/import/folder',
+          );
+        }
+        if ('workspaceId' in metadata) {
+          // Owning workspace is server-stamped from the request's active
+          // workspace — never client-supplied (else a caller could plant a
+          // project into another tenant's workspace).
+          return sendApiError(
+            res, 400, 'BAD_REQUEST',
+            'workspaceId is assigned by the server, not the client',
           );
         }
         if ('orchestratorWorkspace' in metadata) {
@@ -1150,7 +1173,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         }
         externalProjectDir = await createLocationProjectDir(location, id);
       }
-      const projectMetadata =
+      let projectMetadata =
         metadata && typeof metadata === 'object'
           ? {
               ...metadata,
@@ -1188,6 +1211,18 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
                   projectLocationId: selectedLocationId,
                 }
               : null;
+      // Stamp the owning workspace for a scoped (hosted) creator so the project
+      // is visible only within that workspace. Unscoped/local creates leave it
+      // unset (legacy/local — local-only visibility). All downstream writers
+      // (insertProject, ensureProject, writeProjectFile) use projectMetadata.
+      const createScope = resolveWorkspaceScope(req);
+      if (createScope.scoped && createScope.workspaceId) {
+        projectMetadata = {
+          kind: 'prototype',
+          ...(projectMetadata ?? {}),
+          workspaceId: createScope.workspaceId,
+        } as typeof projectMetadata;
+      }
       const now = Date.now();
       let project;
       try {
@@ -1478,6 +1513,31 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           return sendApiError(res, 400, skillValidation.code, skillValidation.message);
         }
         patch.skillId = skillValidation.id;
+      }
+      // workspaceId is server-owned and immutable via PATCH. updateProject
+      // replaces metadata wholesale, so we must (a) reject an attempt to move a
+      // project to another workspace, and (b) re-stamp the existing owner onto
+      // any metadata patch (or a metadata:null clear) so the project can't be
+      // silently detached from its workspace and disappear for its members. The
+      // /:id gate has already confirmed this requester owns the project.
+      {
+        const owned = getProject(db, req.params.id);
+        const ownerWs = owned?.metadata?.workspaceId ?? null;
+        if (ownerWs != null) {
+          if (patch.metadata === null) {
+            patch.metadata = { kind: owned!.metadata!.kind, workspaceId: ownerWs };
+          } else if (patch.metadata && typeof patch.metadata === 'object') {
+            if ('workspaceId' in patch.metadata && (patch.metadata.workspaceId ?? null) !== ownerWs) {
+              return sendApiError(res, 400, 'BAD_REQUEST', 'workspaceId is immutable; it is assigned by the server on create');
+            }
+            patch.metadata = { ...patch.metadata, workspaceId: ownerWs };
+          }
+          // No metadata key in the patch → updateProject leaves metadata (and
+          // thus workspaceId) untouched; nothing to do.
+        } else if (patch.metadata && typeof patch.metadata === 'object' && 'workspaceId' in patch.metadata) {
+          // Legacy/local project (no owner): still never accept a client workspaceId.
+          return sendApiError(res, 400, 'BAD_REQUEST', 'workspaceId is assigned by the server, not the client');
+        }
       }
       const project = updateProject(db, req.params.id, patch);
       if (!project)
