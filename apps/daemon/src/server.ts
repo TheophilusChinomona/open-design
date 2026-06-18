@@ -28,6 +28,7 @@ import {
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
 import { resolveProjectRoot } from './project-root.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { createApiAuthGate } from './auth-context.js';
 import {
   resolveDaemonCliPath,
   resolveDaemonPluginPreviewsDir,
@@ -4448,41 +4449,12 @@ export async function startServer({
   // browser iframes can load HTML/CSS/JS without privileged headers.
   // Rich daemon status stays authenticated because it includes local
   // runtime paths.
-  if (apiToken.length > 0) {
-    const openProbePaths = new Set([
-      '/health',
-      '/api/health',
-      '/ready',
-      '/api/ready',
-      '/version',
-      '/api/version',
-    ]);
-    app.use('/api', (req, res, next) => {
-      if (openProbePaths.has(req.path)) return next();
-      if (req.method === 'GET') {
-        const previewAsset = parseProjectPreviewAssetPath(req.path);
-        if (
-          previewAsset &&
-          projectPreviewScopes.validate(previewAsset.projectId, previewAsset.scope)
-        ) {
-          return next();
-        }
-      }
-      // Loopback short-circuit. We ignore the proxied X-Forwarded-For
-      // header here because a reverse proxy MUST always forward the
-      // bearer; the loopback bypass exists for the localhost desktop
-      // UI which has no proxy in the path.
-      if (isLoopbackPeerAddress(req.socket?.remoteAddress)) return next();
-      const auth = req.get('authorization') ?? '';
-      const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
-      if (!match || match[1] !== apiToken) {
-        return res.status(401).json({
-          error: { code: 'API_TOKEN_REQUIRED', message: 'Authorization: Bearer <OD_API_TOKEN> required' },
-        });
-      }
-      return next();
-    });
-  }
+  // Per-user API auth gate is mounted after the better-auth handler is created
+  // (it needs the auth instance). See createApiAuthGate below — it subsumes the
+  // former OD_API_TOKEN-only middleware: probes stay open, loopback peers and
+  // server-minted GET preview-asset scopes are exempt, OD_API_TOKEN is accepted
+  // as a deprecated bearer fallback, and otherwise a valid better-auth session
+  // or bearer token is required.
 
   // Multi-directory scanning shared by every skill / template surface. The
   // helpers delegate to listSkills(roots) which walks roots in priority
@@ -4800,6 +4772,22 @@ export async function startServer({
     dataDir: RUNTIME_DATA_DIR,
     env: process.env,
   });
+
+  // Per-user gate for every other /api/* route. Runs after the auth handler so
+  // /api/auth/* is served by better-auth first; reads only headers/cookies so
+  // it's safe before express.json. Replaces the shared-OD_API_TOKEN middleware.
+  app.use('/api', createApiAuthGate({
+    auth: openDesignAuth?.auth ?? null,
+    isLoopbackPeer: isLoopbackPeerAddress,
+    ...(apiToken.length > 0 ? { legacyApiToken: apiToken } : {}),
+    isExempt: (req) => {
+      if (req.method !== 'GET') return false;
+      const previewAsset = parseProjectPreviewAssetPath(req.path);
+      return Boolean(
+        previewAsset && projectPreviewScopes.validate(previewAsset.projectId, previewAsset.scope),
+      );
+    },
+  }));
 
   app.use(express.json({ limit: '4mb' }));
 
