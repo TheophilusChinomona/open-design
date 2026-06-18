@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const hu: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Bejelentkezés az Open Designba',
+  'auth.loginSubtitle': 'A folytatáshoz jelentkezz be.',
+  'auth.continueWithGoogle': 'Folytatás Google-fiókkal',
+  'auth.emailCode': 'Kérek egy kódot e-mailben',
+  'auth.sendCode': 'Kód küldése',
+  'auth.codeLabel': 'Ellenőrző kód',
+  'auth.verify': 'Ellenőrzés',
+  'auth.or': 'vagy',
+  'auth.back': 'Vissza',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'Bejelentkezés',
   'auth.create': 'Létrehozás',

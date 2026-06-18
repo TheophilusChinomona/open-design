@@ -118,7 +118,11 @@ function runCli(
   options: { stdin?: string; sessionFile: string },
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolveRun) => {
-    const env: NodeJS.ProcessEnv = { ...process.env, OD_AUTH_SESSION_FILE: options.sessionFile };
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      OD_AUTH_SESSION_FILE: options.sessionFile,
+      OD_CONFIG_FILE: `${options.sessionFile}.config.json`,
+    };
     delete env.NODE_OPTIONS;
     const child = spawn(process.execPath, [TSX_CLI, CLI_SRC, ...args], {
       cwd: DAEMON_ROOT,

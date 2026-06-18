@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const en: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Sign in to Open Design',
+  'auth.loginSubtitle': 'Sign in to continue.',
+  'auth.continueWithGoogle': 'Continue with Google',
+  'auth.emailCode': 'Email me a code',
+  'auth.sendCode': 'Send code',
+  'auth.codeLabel': 'Verification code',
+  'auth.verify': 'Verify',
+  'auth.or': 'or',
+  'auth.back': 'Back',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'Sign in',
   'auth.create': 'Create',

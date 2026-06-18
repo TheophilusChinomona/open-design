@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const ja: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Open Design にサインイン',
+  'auth.loginSubtitle': '続行するにはサインインしてください。',
+  'auth.continueWithGoogle': 'Google で続行',
+  'auth.emailCode': 'コードをメールで送信',
+  'auth.sendCode': 'コードを送信',
+  'auth.codeLabel': '確認コード',
+  'auth.verify': '確認',
+  'auth.or': 'または',
+  'auth.back': '戻る',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'サインイン',
   'auth.create': '作成',

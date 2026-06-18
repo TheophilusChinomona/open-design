@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const zhTW: Dict = {
+  // Auth login wall
+  'auth.loginTitle': '登入 Open Design',
+  'auth.loginSubtitle': '登入以繼續。',
+  'auth.continueWithGoogle': '使用 Google 繼續',
+  'auth.emailCode': '寄送驗證碼給我',
+  'auth.sendCode': '寄送驗證碼',
+  'auth.codeLabel': '驗證碼',
+  'auth.verify': '驗證',
+  'auth.or': '或',
+  'auth.back': '返回',
   // Auth (AuthAccountMenu)
   'auth.signIn': '登入',
   'auth.create': '建立',

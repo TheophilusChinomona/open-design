@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const de: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'Bei Open Design anmelden',
+  'auth.loginSubtitle': 'Melden Sie sich an, um fortzufahren.',
+  'auth.continueWithGoogle': 'Mit Google fortfahren',
+  'auth.emailCode': 'Code per E-Mail senden',
+  'auth.sendCode': 'Code senden',
+  'auth.codeLabel': 'Bestätigungscode',
+  'auth.verify': 'Bestätigen',
+  'auth.or': 'oder',
+  'auth.back': 'Zurück',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'Anmelden',
   'auth.create': 'Registrieren',

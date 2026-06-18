@@ -1,6 +1,16 @@
 import type { Dict } from '../types';
 
 export const th: Dict = {
+  // Auth login wall
+  'auth.loginTitle': 'เข้าสู่ระบบ Open Design',
+  'auth.loginSubtitle': 'เข้าสู่ระบบเพื่อดำเนินการต่อ',
+  'auth.continueWithGoogle': 'ดำเนินการต่อด้วย Google',
+  'auth.emailCode': 'ส่งรหัสทางอีเมล',
+  'auth.sendCode': 'ส่งรหัส',
+  'auth.codeLabel': 'รหัสยืนยัน',
+  'auth.verify': 'ยืนยัน',
+  'auth.or': 'หรือ',
+  'auth.back': 'กลับ',
   // Auth (AuthAccountMenu)
   'auth.signIn': 'เข้าสู่ระบบ',
   'auth.create': 'สร้าง',

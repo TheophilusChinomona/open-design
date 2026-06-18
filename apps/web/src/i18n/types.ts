@@ -45,6 +45,15 @@ export interface Dict {
   'auth.modeLabel': string;
   'auth.failed': string;
   'auth.signOutFailed': string;
+  'auth.loginTitle': string;
+  'auth.loginSubtitle': string;
+  'auth.continueWithGoogle': string;
+  'auth.emailCode': string;
+  'auth.sendCode': string;
+  'auth.codeLabel': string;
+  'auth.verify': string;
+  'auth.or': string;
+  'auth.back': string;
   // Common
   'common.cancel': string;
   'common.save': string;
