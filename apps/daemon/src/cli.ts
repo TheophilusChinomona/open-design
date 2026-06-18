@@ -228,6 +228,12 @@ const AUTH_STRING_FLAGS = new Set([
 const AUTH_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json',
 ]);
+const WORKSPACE_STRING_FLAGS = new Set([
+  'daemon-url', 'token', 'name', 'slug',
+]);
+const WORKSPACE_BOOLEAN_FLAGS = new Set([
+  'help', 'h', 'json',
+]);
 // Hoisted next to the flag sets: `runAuth` is reachable through the
 // top-of-file SUBCOMMAND_MAP dispatch, which runs during module evaluation —
 // a `const` declared down in the auth section would still be in TDZ when
@@ -281,6 +287,8 @@ const SUBCOMMAND_MAP = {
   automations: runAutomation,
   memory: runMemory,
   auth: runAuth,
+  workspace: runWorkspace,
+  workspaces: runWorkspace,
   run: runRun,
   files: runFiles,
   templates: runTemplates,
@@ -7443,6 +7451,112 @@ async function runAuth(args) {
 
   console.error(`unknown subcommand: od auth ${raw}`);
   printAuthHelp();
+  process.exit(2);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od workspace …
+//
+// Dual-track surface for the workspace switcher / members UI. Drives better-
+// auth's organization endpoints on the hosted daemon, authenticated with the
+// stored CLI bearer token (Phase 4). `list | create | switch`.
+// ---------------------------------------------------------------------------
+
+function printWorkspaceHelp() {
+  console.log(`Usage: od workspace <command> [options]
+
+Manage workspaces (organizations) on a hosted Open Design instance.
+
+Commands:
+  list                 List the workspaces you belong to
+  create               Create a workspace (--name, --slug)
+  switch <id>          Set your active workspace
+
+Options:
+  --name <name>        Workspace name (create)
+  --slug <slug>        Workspace slug (create)
+  --json               Machine-readable output
+  --token <tok>        Bearer token (else ~/.open-design/config.json)
+  --daemon-url <url>   Hosted daemon HTTP base`);
+}
+
+async function runWorkspace(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printWorkspaceHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const action = args[0];
+  const rest = args.slice(1);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: WORKSPACE_STRING_FLAGS, boolean: WORKSPACE_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const token = (typeof flags.token === 'string' && flags.token) || readCliAuthConfig().token || null;
+  const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  const authHeaders = { origin: base, ...(token ? { authorization: `Bearer ${token}` } : {}) };
+
+  const call = async (method, path, body) => {
+    try {
+      return await fetch(`${base}${path}`, {
+        method,
+        headers: { ...authHeaders, ...(body ? { 'content-type': 'application/json' } : {}) },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+  };
+
+  if (action === 'list') {
+    const resp = await call('GET', '/api/auth/organization/list');
+    if (!resp.ok) return authHttpFailure(resp);
+    const data = await resp.json().catch(() => []);
+    const orgs = Array.isArray(data) ? data : (data?.organizations ?? []);
+    if (flags.json) return writeJson(orgs);
+    if (orgs.length === 0) {
+      console.log('No workspaces.');
+      return;
+    }
+    for (const o of orgs) console.log(`${o.id}\t${o.slug ?? '-'}\t${o.name}`);
+    return;
+  }
+
+  if (action === 'create') {
+    const name = typeof flags.name === 'string' ? flags.name.trim() : '';
+    if (!name) {
+      console.error('Usage: od workspace create --name <name> [--slug <slug>]');
+      process.exit(2);
+    }
+    const slug = (typeof flags.slug === 'string' && flags.slug.trim())
+      || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const resp = await call('POST', '/api/auth/organization/create', { name, slug });
+    if (!resp.ok) return authHttpFailure(resp);
+    const data = await resp.json().catch(() => null);
+    if (flags.json) return writeJson(data);
+    console.log(`Created workspace ${data?.name ?? name} (${data?.slug ?? slug}).`);
+    return;
+  }
+
+  if (action === 'switch') {
+    const id = rest.find((a) => !a.startsWith('-'));
+    if (!id) {
+      console.error('Usage: od workspace switch <id>');
+      process.exit(2);
+    }
+    const resp = await call('POST', '/api/auth/organization/set-active', { organizationId: id });
+    if (!resp.ok) return authHttpFailure(resp);
+    if (flags.json) return writeJson({ ok: true, activeOrganizationId: id });
+    console.log(`Active workspace set to ${id}.`);
+    return;
+  }
+
+  console.error(`unknown subcommand: od workspace ${action}`);
+  printWorkspaceHelp();
   process.exit(2);
 }
 
